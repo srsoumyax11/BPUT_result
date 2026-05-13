@@ -19,6 +19,10 @@ EXPORTS_DIR = os.path.abspath("exports")
 if not os.path.exists(EXPORTS_DIR):
     os.makedirs(EXPORTS_DIR)
 
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy", "timestamp": time.time()}), 200
+
 # Global session cache to avoid redundant fetching
 SESSIONS_CACHE = []
 
