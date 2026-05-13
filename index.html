@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BPUT Pro Dashboard | Real-Time Scraper</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body class="dashboard-theme">
+    <main class="full-width-container">
+        <aside class="control-panel">
+            <header class="panel-header">
+                <h1>BPUT PRO</h1>
+                <p>Advanced Real-Time Extraction Engine</p>
+            </header>
+
+            <form id="scraperForm" class="control-form">
+                <div class="field-group">
+                    <label>Registration Range</label>
+                    <div class="range-inputs">
+                        <input type="text" id="start_reg" placeholder="Start Roll" required>
+                        <span style="color: var(--text-muted)">to</span>
+                        <input type="text" id="end_reg" placeholder="End Roll" required>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label>Exam Session</label>
+                        <label class="toggle-label" style="text-transform: none; font-size: 0.6rem; cursor: pointer;">
+                            <input type="checkbox" id="manual_session_toggle" style="width: auto; margin-right: 4px;"> Manual Input
+                        </label>
+                    </div>
+                    <select id="session_select" required>
+                        <option value="" disabled selected>Select a session...</option>
+                        {% for s in sessions %}
+                        <option value="{{ s.value }}">{{ s.text }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" id="session_manual" placeholder="e.g. Odd-(2025-26)" style="display:none;">
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" id="startBtn">
+                        <span class="icon">🚀</span> Start Extraction
+                    </button>
+                    <button type="button" id="clearBtn" class="secondary-btn">
+                        <span class="icon">🗑️</span> Clear All Records
+                    </button>
+                </div>
+            </form>
+
+            <div id="statusIndicator" class="status-indicator">
+                <div class="dot"></div>
+                <span id="statusText">System Ready</span>
+            </div>
+
+            <div class="stats-panel">
+                <div class="stat-item">
+                    <label>Extracted</label>
+                    <span id="countFound">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>Active</label>
+                    <span id="currentRoll">---</span>
+                </div>
+            </div>
+
+            <a href="/download" id="downloadBtn" class="download-link" style="display:none;">
+                <span class="icon">📊</span> Download Excel Report
+            </a>
+        </aside>
+
+        <section class="display-panel">
+            <div id="collegeBanner" class="college-banner" style="display:none;">
+                <span class="label">IDENTIFIED INSTITUTION</span>
+                <h2 id="collegeName">---</h2>
+            </div>
+
+            <div class="table-wrapper">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Roll Number</th>
+                            <th>Student Name</th>
+                            <th>Semester</th>
+                            <th>SGPA</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Content injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById('scraperForm');
+        const startBtn = document.getElementById('startBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusText = document.getElementById('statusText');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const tableBody = document.getElementById('tableBody');
+        const collegeBanner = document.getElementById('collegeBanner');
+        const collegeName = document.getElementById('collegeName');
+        const countFound = document.getElementById('countFound');
+        const currentRoll = document.getElementById('currentRoll');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        let eventSource = null;
+        let foundCount = 0;
+
+        function toggleDetails(rollNo, semester) {
+            const safeId = `${rollNo}-${semester.replace(/\s+/g, '-')}`;
+            const container = document.getElementById(`details-${safeId}`);
+            const btn = document.getElementById(`btn-${safeId}`);
+            if (container.classList.contains('expanded')) {
+                container.classList.remove('expanded');
+                btn.textContent = 'View Grades';
+            } else {
+                container.classList.add('expanded');
+                btn.textContent = 'Hide Grades';
+            }
+        }
+
+        function createGradesTable(grades) {
+            if (!grades || grades.length === 0) return '<p style="color: var(--text-muted); font-size: 0.8rem;">No subject details available.</p>';
+
+            let html = `
+                <table class="grades-subtable">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Subject Name</th>
+                            <th>Type</th>
+                            <th>Credits</th>
+                            <th>Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            grades.forEach(g => {
+                html += `
+                    <tr>
+                        <td><code>${g.subjectCODE}</code></td>
+                        <td>${g.subjectName}</td>
+                        <td>${g.subjectTP === 'T' ? 'Theory' : 'Practical'}</td>
+                        <td>${g.subjectCredits}</td>
+                        <td><strong>${g.grade}</strong></td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        const manualSessionToggle = document.getElementById('manual_session_toggle');
+        const sessionSelect = document.getElementById('session_select');
+        const sessionManual = document.getElementById('session_manual');
+
+        manualSessionToggle.addEventListener('change', () => {
+            if (manualSessionToggle.checked) {
+                sessionSelect.style.display = 'none';
+                sessionManual.style.display = 'block';
+                sessionManual.required = true;
+                sessionSelect.required = false;
+            } else {
+                sessionSelect.style.display = 'block';
+                sessionManual.style.display = 'none';
+                sessionManual.required = false;
+                sessionSelect.required = true;
+            }
+        });
+
+        form.addEventListener('submit', (e) => {
+            const startReg = document.getElementById('start_reg').value.trim();
+            const endReg = document.getElementById('end_reg').value.trim();
+            
+            let session = '';
+            if (manualSessionToggle.checked) {
+                session = sessionManual.value.trim();
+            } else {
+                session = sessionSelect.value;
+            }
+
+            console.log("Validation Check:", {startReg, endReg, session});
+
+            if (!startReg || !endReg || !session || session === "null") {
+                e.preventDefault();
+                alert('CRITICAL: All fields (Start Roll, End Roll, and Session) are mandatory!');
+                return false;
+            }
+
+            if (isNaN(startReg) || isNaN(endReg)) {
+                e.preventDefault();
+                alert('Registration numbers must be numeric!');
+                return false;
+            }
+
+            e.preventDefault(); // Stop normal submission
+
+            // Reset UI
+            tableBody.innerHTML = '';
+            foundCount = 0;
+            countFound.textContent = '0';
+            startBtn.disabled = true;
+            statusText.textContent = 'Validating Range...';
+            statusIndicator.classList.add('active');
+            downloadBtn.style.display = 'none';
+
+            if (eventSource) eventSource.close();
+
+            const url = `/stream-results?start_reg=${startReg}&end_reg=${endReg}&session=${session}`;
+            eventSource = new EventSource(url);
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.error) {
+                    statusText.textContent = data.error;
+                    statusIndicator.classList.remove('active');
+                    eventSource.close();
+                    startBtn.disabled = false;
+                    alert('Validation Error: ' + data.error);
+                    return;
+                }
+
+                if (data.type === 'header') {
+                    collegeBanner.style.display = 'flex';
+                    collegeName.textContent = data.college;
+                    statusText.textContent = 'Extracting Live Data...';
+                }
+
+                if (data.type === 'student') {
+                    const student = data.data;
+                    foundCount++;
+                    countFound.textContent = foundCount;
+                    currentRoll.textContent = student['Roll No'];
+
+                    const statusClass = student['Status'].toLowerCase().includes('success') ? 'success' :
+                        (student['Status'].toLowerCase().includes('partial') ? 'partial' : 'failed');
+
+                    const safeId = `${student['Roll No']}-${student['Semester'].replace(/\s+/g, '-')}`;
+
+                    // Student Main Row
+                    const mainRow = document.createElement('tr');
+                    mainRow.className = 'student-row';
+                    mainRow.innerHTML = `
+                        <td><strong>${student['Roll No']}</strong></td>
+                        <td>${student['Name']}</td>
+                        <td><span class="badge semester-badge">${student['Semester']}</span></td>
+                        <td><span style="font-weight: 700; color: var(--accent)">${student['SGPA']}</span></td>
+                        <td><span class="badge ${statusClass}">${student['Status']}</span></td>
+                        <td><button class="toggle-btn" id="btn-${safeId}" onclick="toggleDetails('${student['Roll No']}', '${student['Semester']}')">View Grades</button></td>
+                    `;
+
+                    // Student Details Row
+                    const detailsRow = document.createElement('tr');
+                    detailsRow.className = 'details-row';
+                    detailsRow.innerHTML = `
+                        <td colspan="6" style="padding: 0;">
+                            <div id="details-${safeId}" class="details-container">
+                                <h4 style="margin-bottom: 1rem; font-size: 0.8rem; color: var(--accent);">SUBJECT-WISE PERFORMANCE - ${student['Semester']}</h4>
+                                ${createGradesTable(student['grades'])}
+                            </div>
+                        </td>
+                    `;
+
+                    tableBody.appendChild(mainRow);
+                    tableBody.appendChild(detailsRow);
+                    mainRow.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
+
+                if (data.type === 'complete') {
+                    statusText.textContent = 'Extraction Complete';
+                    statusIndicator.classList.remove('active');
+                    eventSource.close();
+                    startBtn.disabled = false;
+                    downloadBtn.style.display = 'flex';
+                }
+            };
+
+            eventSource.onerror = () => {
+                statusText.textContent = 'Connection Interrupted';
+                statusIndicator.classList.remove('active');
+                eventSource.close();
+                startBtn.disabled = false;
+                downloadBtn.style.display = 'flex';
+            };
+        });
+
+        clearBtn.addEventListener('click', async () => {
+            if (!confirm('Permanently clear all extracted data? This action cannot be undone.')) return;
+            const resp = await fetch('/clear-data', { method: 'POST' });
+            if (resp.ok) location.reload();
+        });
+    </script>
+</body>
+
+</html>

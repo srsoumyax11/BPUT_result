@@ -1,0 +1,19 @@
+POST /student-results-list?rollNo=2301110123&dob=2020-01-28&session=Odd-(2025-26) HTTP/2
+Host: results.bput.ac.in
+Content-Length: 0
+Sec-Ch-Ua-Platform: "Windows"
+Accept-Language: en-US,en;q=0.9
+Sec-Ch-Ua: "Not)A;Brand";v="8", "Chromium";v="138"
+Sec-Ch-Ua-Mobile: ?0
+X-Requested-With: XMLHttpRequest
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+Accept: */*
+Content-Type: application/json; charset=utf-8
+Origin: https://results.bput.ac.in
+Sec-Fetch-Site: same-origin
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Referer: https://results.bput.ac.in/
+Accept-Encoding: gzip, deflate, br
+Priority: u=1, i
+

@@ -1,0 +1,19 @@
+{
+  "status_code": 200,
+  "url": "https://results.bput.ac.in/student-detsils-results?rollNo=2301110123",
+  "response": "{\"rollNo\":\"2301110123\",\"studentName\":\"SWAYAM MOHAPATRA\",\"batch\":\"2023\",\"branchId\":\"18\",\"studentPhoto\":\"290424133828644.jpg\",\"branchName\":\"B.Tech.(ELECTRICAL ENGINEERING)\",\"courseName\":\"B.Tech\",\"collegeCode\":\"110\",\"collegeName\":\"Government College of Engineering, Kalahandi\",\"semId\":null,\"maxYear\":null,\"leet\":null}",
+  "response_json": {
+    "rollNo": "2301110123",
+    "studentName": "SWAYAM MOHAPATRA",
+    "batch": "2023",
+    "branchId": "18",
+    "studentPhoto": "290424133828644.jpg",
+    "branchName": "B.Tech.(ELECTRICAL ENGINEERING)",
+    "courseName": "B.Tech",
+    "collegeCode": "110",
+    "collegeName": "Government College of Engineering, Kalahandi",
+    "semId": null,
+    "maxYear": null,
+    "leet": null
+  }
+}
