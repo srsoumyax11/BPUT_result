@@ -81,6 +81,10 @@ def generate_pdf(results):
     
     # Group results by Branch and Semester
     groups = {}
+    all_sgpas = []
+    passed = 0
+    total_students = len(results)
+    
     for res in results:
         info = res.get('student_info', {})
         branch = info.get('branchName', 'Branch').split('(')[-1].replace(')', '').strip()
@@ -89,6 +93,12 @@ def generate_pdf(results):
             group_key = f"{branch} - {sem_name}"
             if group_key not in groups:
                 groups[group_key] = []
+            
+            sgpa = float(detail.get('sgpadetails', {}).get('sgpa', 0) or 0)
+            all_sgpas.append(sgpa)
+            if not any(g.get('grade') in ['F', 'M', 'S'] for g in detail.get('grades', [])):
+                passed += 1
+                
             groups[group_key].append({
                 "roll": res['roll_no'],
                 "name": info.get('studentName', 'N/A'),
@@ -96,18 +106,47 @@ def generate_pdf(results):
                 "grades": detail.get('grades', [])
             })
 
+    avg_sgpa = sum(all_sgpas)/len(all_sgpas) if all_sgpas else 0
+    pass_rate = (passed/total_students)*100 if total_students else 0
+    toppers = sorted(results, key=lambda x: float(list(x.get('detailed_results', {}).values())[0].get('sgpadetails', {}).get('sgpa', 0) or 0) if x.get('detailed_results') else 0, reverse=True)[:3]
+
     os.makedirs("exports", exist_ok=True)
-    pdf_paths = []
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
     
+    # SUMMARY PAGE
+    pdf.add_page()
+    pdf.set_fill_color(240, 244, 255)
+    pdf.rect(10, 10, 277, 40, "F")
+    
+    pdf.set_font("helvetica", "B", 20)
+    pdf.set_text_color(99, 102, 241)
+    pdf.text(20, 22, "BPUT BATCH ANALYTICS REPORT")
+    
+    pdf.set_font("helvetica", "", 11)
+    pdf.set_text_color(100, 100, 100)
+    pdf.text(20, 30, f"Total Students: {total_students}  |  Average SGPA: {avg_sgpa:.2f}  |  Pass Rate: {pass_rate:.1f}%")
+    pdf.text(20, 36, f"Generated On: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # TOPPERS BOX
+    pdf.set_font("helvetica", "B", 12)
+    pdf.set_text_color(218, 165, 32)
+    pdf.text(180, 22, "OVERALL TOPPERS")
+    pdf.set_font("helvetica", "", 9)
+    pdf.set_text_color(50, 50, 50)
+    for idx, t in enumerate(toppers):
+        t_name = t.get('student_info', {}).get('studentName', 'N/A')
+        t_sgpa = list(t.get('detailed_results', {}).values())[0].get('sgpadetails', {}).get('sgpa', '0') if t.get('detailed_results') else '0'
+        pdf.text(180, 28 + (idx*5), f"{idx+1}. {t_name[:35]} ({t_sgpa})")
+    
+    pdf.ln(50)
+
     for title, students in groups.items():
-        pdf = FPDF(orientation="L", unit="mm", format="A4")
+        # If it's the first group, we might already have the summary on page 1.
+        # For simplicity, let's just start every group on a new page.
         pdf.add_page()
         pdf.set_font("helvetica", "B", 16)
-        pdf.cell(0, 10, "BPUT ACADEMIC REPORT", ln=True, align="C")
-        pdf.set_font("helvetica", "B", 12)
+        pdf.set_text_color(99, 102, 241)
         pdf.cell(0, 10, f"Group: {title}", ln=True)
-        pdf.set_font("helvetica", "I", 8)
-        pdf.cell(0, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
         pdf.ln(5)
 
         # Get unique subjects for this group
@@ -135,12 +174,25 @@ def generate_pdf(results):
         # Rows
         pdf.set_text_color(40, 40, 40) # Dark gray text for rows
         pdf.set_font("helvetica", "", 7)
+        
+        # Determine medals within this group
+        group_students = sorted(students, key=lambda x: float(x['sgpa']) if x['sgpa'] != 'N/A' else 0, reverse=True)
+        top_sgpas = sorted(list(set(float(s['sgpa']) for s in students if s['sgpa'] != 'N/A')), reverse=True)
+        
         for i, s in enumerate(students):
             # Alternating row background
             fill = i % 2 == 0
             pdf.set_fill_color(248, 250, 252) # Very light gray
             
-            pdf.cell(25, 7, str(s['roll']), 1, 0, "L", fill)
+            # Medal check
+            medal = ""
+            s_sgpa = float(s['sgpa']) if s['sgpa'] != 'N/A' else 0
+            if s_sgpa > 0:
+                if s_sgpa == top_sgpas[0]: medal = "G "
+                elif len(top_sgpas) > 1 and s_sgpa == top_sgpas[1]: medal = "S "
+                elif len(top_sgpas) > 2 and s_sgpa == top_sgpas[2]: medal = "B "
+            
+            pdf.cell(25, 7, medal + str(s['roll']), 1, 0, "L", fill)
             pdf.cell(50, 7, s['name'][:30], 1, 0, "L", fill)
             
             # SGPA highlighting

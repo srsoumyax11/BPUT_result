@@ -9,7 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <aside class="sidebar">
@@ -68,6 +69,44 @@
 
     <main class="main-content">
         <div class="progress-line" id="progressLine"></div>
+
+        <!-- Collapsible Analytics Dashboard -->
+        <div class="analytics-board" id="analyticsBoard" style="display: none;">
+            <div class="board-controls">
+                <div class="board-info">
+                    <span id="batchInfoText">Batch: --- | Session: ---</span>
+                </div>
+                <div class="board-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="globalSearch" placeholder="Search student name or roll number..." onkeyup="filterResults()">
+                </div>
+                <button class="toggle-board-btn" onclick="toggleAnalyticsBoard()">
+                    <i class="fas fa-chevron-down" id="boardToggleIcon"></i>
+                </button>
+            </div>
+            
+            <div class="board-expanded-content" id="boardExpanded" style="display: none;">
+                <div class="analytics-grid">
+                    <div class="analytics-card chart-card">
+                        <canvas id="passFailChart"></canvas>
+                    </div>
+                    <div class="analytics-card hall-of-fame">
+                        <h4><i class="fas fa-crown"></i> Hall of Fame</h4>
+                        <div id="topToppersList"></div>
+                    </div>
+                    <div class="analytics-card summary-stats">
+                        <div class="summary-item">
+                            <span class="label">Avg SGPA</span>
+                            <span class="value" id="overallAvg">0.00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Pass Rate</span>
+                            <span class="value" id="overallPassRate">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div id="sectionsContainer" class="main-content" style="padding: 0.5rem; overflow-y: auto;">
             <!-- Tables will be injected here dynamically by Branch & Semester -->
@@ -137,6 +176,9 @@
 
             const url = `/stream-results?start_reg=${start}&end_reg=${end}&session=${session}&threads=${threads}&retries=${retries}`;
             eventSource = new EventSource(url);
+
+            // Update board info text
+            document.getElementById('batchInfoText').textContent = `Batch: ${start} - ${end} | Session: ${session}`;
 
             eventSource.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
@@ -284,17 +326,53 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
             
+            // Get Global Stats
+            const allStudents = Object.values(tableRegistry).flatMap(reg => reg.students);
+            const total = allStudents.length;
+            const backs = allStudents.filter(s => s.isBack).length;
+            const avgSgpa = allStudents.reduce((a, b) => a + b.sgpa, 0) / (total || 1);
+            const passRate = ((total - backs) / (total || 1)) * 100;
+
+            // Header Box
+            doc.setFillColor(240, 244, 255);
+            doc.rect(14, 10, 269, 25, 'F');
+            
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(18);
-            doc.text("BPUT ACADEMIC REPORT", 14, 15);
-            doc.setFontSize(11);
+            doc.setFontSize(16);
+            doc.setTextColor(99, 102, 241);
+            doc.text("BPUT BATCH ANALYTICS REPORT", 20, 18);
+            
+            doc.setFontSize(9);
             doc.setFont("helvetica", "normal");
-            doc.text(`Group: ${title}`, 14, 22);
-            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 27);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Group: ${title} | Total Students: ${total} | Avg SGPA: ${avgSgpa.toFixed(2)} | Pass Rate: ${passRate.toFixed(0)}%`, 20, 24);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 29);
+
+            // Toppers Summary (Top 3 overall)
+            let toppers = [];
+            document.querySelectorAll('tbody tr').forEach(row => {
+                const name = row.querySelector('.name-cell')?.textContent;
+                const sgpa = parseFloat(row.querySelector('.badge')?.textContent);
+                if (name && !isNaN(sgpa)) toppers.push({ name, sgpa });
+            });
+            // Unique toppers
+            toppers = Array.from(new Map(toppers.map(t => [t.name, t])).values());
+            toppers.sort((a, b) => b.sgpa - a.sgpa);
+            const top3 = toppers.slice(0, 3);
+            
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(218, 165, 32);
+            doc.text("SESSION TOPPERS:", 210, 18); // Moved further right
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(50, 50, 50);
+            top3.forEach((t, i) => {
+                doc.text(`${i+1}. ${t.name.slice(0, 30)} (${t.sgpa})`, 210, 23 + (i*4));
+            });
 
             doc.autoTable({
                 html: `#table-${id}`,
-                startY: 35,
+                startY: 40,
                 theme: 'grid',
                 styles: { 
                     fontSize: 8, 
@@ -313,6 +391,15 @@
                 didParseCell: function(data) {
                     if (data.section === 'body') {
                         const cellText = data.cell.text[0];
+                        
+                        // Handle medals for Roll No cell (PDF compatibility)
+                        if (data.column.index === 0) {
+                            const rollNum = cellText.replace(/[🥇🥈🥉]/g, '').trim();
+                            if (cellText.includes('🥇')) data.cell.text[0] = `[TOPPER 1] ${rollNum}`;
+                            else if (cellText.includes('🥈')) data.cell.text[0] = `[TOPPER 2] ${rollNum}`;
+                            else if (cellText.includes('🥉')) data.cell.text[0] = `[TOPPER 3] ${rollNum}`;
+                        }
+
                         if (cellText === 'F' || cellText === 'M') {
                             data.cell.styles.textColor = [220, 38, 38]; // Red
                             data.cell.styles.fontStyle = 'bold';
@@ -433,10 +520,128 @@
             document.getElementById(`stat-avg-${id}`).textContent = avg.toFixed(2);
             
             sortTableRows(id);
+            updateGlobalAnalytics();
+        }
+
+        let passFailChart = null;
+
+        function filterResults() {
+            const query = document.getElementById('globalSearch').value.toLowerCase();
+            const allRows = document.querySelectorAll('tbody tr');
+            
+            allRows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const isQueue = row.closest('.table-container').id === 'section-PENDING_QUEUE';
+                if (isQueue) return;
+
+                if (text.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            // Hide empty sections
+            document.querySelectorAll('.table-container').forEach(section => {
+                if (section.id === 'section-PENDING_QUEUE') return;
+                const visibleRows = section.querySelectorAll('tbody tr:not([style*="display: none"])');
+                section.style.display = visibleRows.length > 0 || query === "" ? '' : 'none';
+            });
+        }
+
+        function updateGlobalAnalytics() {
+            const allStudents = Object.values(tableRegistry).flatMap(reg => reg.students);
+            if (allStudents.length === 0) return;
+
+            document.getElementById('analyticsBoard').style.display = 'grid';
+
+            const total = allStudents.length;
+            const backs = allStudents.filter(s => s.isBack).length;
+            const passes = total - backs;
+            const avgSgpa = allStudents.reduce((a, b) => a + b.sgpa, 0) / total;
+            const passRate = (passes / total) * 100;
+
+            document.getElementById('overallAvg').textContent = avgSgpa.toFixed(2);
+            document.getElementById('overallPassRate').textContent = `${passRate.toFixed(0)}%`;
+
+            // Update Chart
+            const ctx = document.getElementById('passFailChart').getContext('2d');
+            if (passFailChart) passFailChart.destroy();
+            
+            passFailChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pass', 'Backlog'],
+                    datasets: [{
+                        data: [passes, backs],
+                        backgroundColor: ['#00ff7f', '#ff453a'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '70%',
+                    plugins: { legend: { display: false } },
+                    maintainAspectRatio: false
+                }
+            });
+
+            // Update Hall of Fame
+            updateHallOfFame();
+        }
+
+        function updateHallOfFame() {
+            let allResults = [];
+            document.querySelectorAll('tbody tr').forEach(row => {
+                const roll = row.querySelector('.roll-cell')?.textContent;
+                const name = row.querySelector('.name-cell')?.textContent;
+                const sgpaText = row.querySelector('.badge')?.textContent;
+                const sgpa = parseFloat(sgpaText);
+                const isQueue = row.closest('.table-container').id === 'section-PENDING_QUEUE';
+
+                if (roll && name && !isNaN(sgpa) && !isQueue) {
+                    allResults.push({ roll, name, sgpa, row });
+                }
+            });
+
+            // Remove existing medals
+            document.querySelectorAll('.medal-icon').forEach(m => m.remove());
+
+            // Sort and take top 3
+            allResults.sort((a, b) => b.sgpa - a.sgpa);
+            const toppers = allResults.slice(0, 5); 
+
+            const listEl = document.getElementById('topToppersList');
+            if (listEl) listEl.innerHTML = '';
+
+            toppers.forEach((t, i) => {
+                const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : ''));
+                const medalClass = i === 0 ? 'medal-gold' : (i === 1 ? 'medal-silver' : (i === 2 ? 'medal-bronze' : ''));
+                
+                if (i < 3) {
+                    if (listEl) {
+                        const item = document.createElement('div');
+                        item.className = 'topper-item';
+                        item.innerHTML = `<span class="${medalClass}" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px;">
+                            ${medal} ${t.name}
+                            <br><small style="opacity: 0.5; margin-left: 1.5rem;">Reg: ${t.roll}</small>
+                        </span> <b>${t.sgpa}</b>`;
+                        listEl.appendChild(item);
+                    }
+
+                    const rollCell = t.row.querySelector('.roll-cell');
+                    if (rollCell) {
+                        const icon = document.createElement('span');
+                        icon.className = `medal-icon ${medalClass}`;
+                        icon.innerHTML = medal;
+                        rollCell.prepend(icon);
+                    }
+                }
+            });
         }
 
         function sortTableRows(id) {
             const tbody = document.querySelector(`#table-${id} tbody`);
+            if (!tbody) return;
             const rows = Array.from(tbody.querySelectorAll('tr'));
             
             rows.sort((a, b) => {
@@ -446,6 +651,15 @@
             });
             
             rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function toggleAnalyticsBoard() {
+            const board = document.getElementById('boardExpanded');
+            const icon = document.getElementById('boardToggleIcon');
+            const isHidden = board.style.display === 'none';
+            
+            board.style.display = isHidden ? 'block' : 'none';
+            icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
         }
 
         loadReports();
