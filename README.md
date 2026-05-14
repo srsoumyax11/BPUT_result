@@ -5,6 +5,7 @@ A high-performance, professional-grade academic data aggregator and analytics pl
 ![Version](https://img.shields.io/badge/version-1.5.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
+[![Live Demo](https://img.shields.io/badge/Live-Demo-red?style=for-the-badge&logo=render)](https://bput-result.onrender.com/)
 
 ---
 
@@ -98,4 +99,6 @@ Contributions are welcome! Please feel free to submit a Pull Request or open an 
 
 ---
 
-**Developed with ❤️ for the BPUT Community.**
+---
+
+**Developed with ❤️ by [srsoumyax11](https://github.com/srsoumyax11) for the BPUT Community.**
