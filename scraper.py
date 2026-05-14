@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import pandas as pd
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -7,7 +8,13 @@ from api_test.combined_resolver import BPUTResolver
 
 def fetch_student_with_retry(roll, session, retries=3):
     resolver = BPUTResolver()
-    return resolver.resolve_all(roll, session, max_retries=retries)
+    for i in range(retries):
+        try:
+            return resolver.resolve_all(roll, session)
+        except Exception as e:
+            if i == retries - 1:
+                return {"roll_no": roll, "errors": [{"message": str(e)}], "student_info": {}}
+            time.sleep(1)
 
 def generate_excel(results):
     rows = []

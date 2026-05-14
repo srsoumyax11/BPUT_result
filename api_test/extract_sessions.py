@@ -34,7 +34,8 @@ def extract_sessions():
                 for opt in options:
                     val = opt.get('value')
                     text = opt.text.strip()
-                    if val and text and val != "0":
+                    # Exclude placeholders
+                    if val and text and val != "0" and "Select" not in text and val != "default_option":
                         sessions.append({"value": val, "text": text})
                 break
         
