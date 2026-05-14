@@ -13,9 +13,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <aside class="sidebar">
-        <div class="logo">
+    <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebar()"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="logo" style="display: flex; justify-content: space-between; align-items: center;">
             <h2>BPUT_SCRAPER_v2</h2>
+            <button type="button" class="icon-btn mobile-close-btn" onclick="toggleSidebar()"><i class="fas fa-times"></i></button>
         </div>
 
         <form id="settingsForm" class="settings-section">
@@ -68,6 +70,10 @@
     </aside>
 
     <main class="main-content">
+        <div class="mobile-header">
+            <button type="button" onclick="toggleSidebar()" class="icon-btn"><i class="fas fa-bars"></i></button>
+            <span style="font-weight: bold; margin-left: 10px; font-size: 0.85rem; letter-spacing: 1px;">BPUT_SCRAPER</span>
+        </div>
         <div class="progress-line" id="progressLine"></div>
 
         <!-- Collapsible Analytics Dashboard -->
@@ -150,6 +156,7 @@
             // Reset UI
             sectionsContainer.innerHTML = '';
             tableRegistry = {};
+            window.firstCollegeName = null;
             progressLine.style.width = '0%';
             
             totalToFetch = end - start + 1;
@@ -326,53 +333,24 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
             
-            // Get Global Stats
-            const allStudents = Object.values(tableRegistry).flatMap(reg => reg.students);
-            const total = allStudents.length;
-            const backs = allStudents.filter(s => s.isBack).length;
-            const avgSgpa = allStudents.reduce((a, b) => a + b.sgpa, 0) / (total || 1);
-            const passRate = ((total - backs) / (total || 1)) * 100;
-
             // Header Box
             doc.setFillColor(240, 244, 255);
-            doc.rect(14, 10, 269, 25, 'F');
+            doc.rect(14, 10, 269, 16, 'F');
             
+            const pdfTitle = window.firstCollegeName || "BPUT BATCH ANALYTICS REPORT";
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(16);
+            doc.setFontSize(14);
             doc.setTextColor(99, 102, 241);
-            doc.text("BPUT BATCH ANALYTICS REPORT", 20, 18);
+            doc.text(pdfTitle, 20, 18);
             
             doc.setFontSize(9);
             doc.setFont("helvetica", "normal");
             doc.setTextColor(100, 100, 100);
-            doc.text(`Group: ${title} | Total Students: ${total} | Avg SGPA: ${avgSgpa.toFixed(2)} | Pass Rate: ${passRate.toFixed(0)}%`, 20, 24);
-            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 29);
-
-            // Toppers Summary (Top 3 overall)
-            let toppers = [];
-            document.querySelectorAll('tbody tr').forEach(row => {
-                const name = row.querySelector('.name-cell')?.textContent;
-                const sgpa = parseFloat(row.querySelector('.badge')?.textContent);
-                if (name && !isNaN(sgpa)) toppers.push({ name, sgpa });
-            });
-            // Unique toppers
-            toppers = Array.from(new Map(toppers.map(t => [t.name, t])).values());
-            toppers.sort((a, b) => b.sgpa - a.sgpa);
-            const top3 = toppers.slice(0, 3);
-            
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(218, 165, 32);
-            doc.text("SESSION TOPPERS:", 210, 18); // Moved further right
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(50, 50, 50);
-            top3.forEach((t, i) => {
-                doc.text(`${i+1}. ${t.name.slice(0, 30)} (${t.sgpa})`, 210, 23 + (i*4));
-            });
+            doc.text(`Group: ${title} | Generated: ${new Date().toLocaleString()}`, 20, 23);
 
             doc.autoTable({
                 html: `#table-${id}`,
-                startY: 40,
+                startY: 30,
                 theme: 'grid',
                 styles: { 
                     fontSize: 8, 
@@ -419,6 +397,10 @@
             const info = data.student_info || {};
             const name = info.studentName || "N/A";
             const branch = info.branchName || "UNKNOWN BRANCH";
+            
+            if (!window.firstCollegeName && (info.collegeName || info.collegeCode)) {
+                window.firstCollegeName = info.collegeName || info.collegeCode;
+            }
             
             const semIds = Object.keys(data.detailed_results || {});
             
@@ -660,6 +642,11 @@
             
             board.style.display = isHidden ? 'block' : 'none';
             icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.getElementById('mobileOverlay').classList.toggle('active');
         }
 
         loadReports();
