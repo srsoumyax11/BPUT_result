@@ -17,6 +17,9 @@ def fetch_student_with_retry(roll, session, retries=3):
             time.sleep(1)
 
 def generate_excel(results):
+    # Sort results by roll number numerically
+    results = sorted(results, key=lambda x: int(x.get('roll_no', 0)))
+    
     rows = []
     all_subject_codes = set()
     
@@ -72,6 +75,9 @@ def generate_excel(results):
 
 def generate_pdf(results):
     from fpdf import FPDF
+    
+    # Sort results by roll number numerically
+    results = sorted(results, key=lambda x: int(x.get('roll_no', 0)))
     
     # Group results by Branch and Semester
     groups = {}

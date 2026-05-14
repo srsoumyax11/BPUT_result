@@ -431,6 +431,21 @@
             document.getElementById(`stat-total-${id}`).textContent = total;
             document.getElementById(`stat-status-${id}`).textContent = `P: ${passes} | B: ${backs}`;
             document.getElementById(`stat-avg-${id}`).textContent = avg.toFixed(2);
+            
+            sortTableRows(id);
+        }
+
+        function sortTableRows(id) {
+            const tbody = document.querySelector(`#table-${id} tbody`);
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            rows.sort((a, b) => {
+                const rollA = parseInt(a.querySelector('.roll-cell').textContent);
+                const rollB = parseInt(b.querySelector('.roll-cell').textContent);
+                return rollA - rollB;
+            });
+            
+            rows.forEach(row => tbody.appendChild(row));
         }
 
         loadReports();
