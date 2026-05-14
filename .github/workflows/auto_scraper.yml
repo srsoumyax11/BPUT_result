@@ -1,0 +1,45 @@
+name: BPUT Auto-Scraper Bot
+
+on:
+  schedule:
+    # Runs every 6 hours (adjust as needed)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    # These variables can be set in GitHub -> Settings -> Secrets and variables -> Actions
+    env:
+      START_ROLL: ${{ vars.START_ROLL || '2301230001' }}
+      END_ROLL: ${{ vars.END_ROLL || '2301230100' }}
+      THREADS: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Monitor
+        run: python monitor.py
+
+      - name: Commit and Push Reports
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "BPUT-Bot"
+          # Add state file and any new reports in exports/
+          git add api_test/last_session.txt exports/
+          git commit -m "Auto-update: New session results extracted [skip ci]" || echo "No changes to commit"
+          git push
