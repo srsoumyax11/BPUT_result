@@ -114,7 +114,9 @@ def generate_pdf(results):
 
         # Table Header
         pdf.set_font("helvetica", "B", 8)
-        pdf.set_fill_color(240, 240, 240)
+        pdf.set_fill_color(99, 102, 241) # Indigo Accent
+        pdf.set_text_color(255, 255, 255) # White text for header
+        
         pdf.cell(25, 8, "Roll No", 1, 0, "C", True)
         pdf.cell(50, 8, "Name", 1, 0, "C", True)
         pdf.cell(15, 8, "SGPA", 1, 0, "C", True)
@@ -125,15 +127,37 @@ def generate_pdf(results):
         pdf.ln()
 
         # Rows
+        pdf.set_text_color(40, 40, 40) # Dark gray text for rows
         pdf.set_font("helvetica", "", 7)
-        for s in students:
-            pdf.cell(25, 7, str(s['roll']), 1)
-            pdf.cell(50, 7, s['name'][:30], 1)
-            pdf.cell(15, 7, str(s['sgpa']), 1, 0, "C")
+        for i, s in enumerate(students):
+            # Alternating row background
+            fill = i % 2 == 0
+            pdf.set_fill_color(248, 250, 252) # Very light gray
+            
+            pdf.cell(25, 7, str(s['roll']), 1, 0, "L", fill)
+            pdf.cell(50, 7, s['name'][:30], 1, 0, "L", fill)
+            
+            # SGPA highlighting
+            sgpa_val = float(s['sgpa']) if s['sgpa'] != "N/A" else 0
+            if sgpa_val >= 8.5: pdf.set_text_color(5, 150, 105) # Green
+            elif sgpa_val < 6.0: pdf.set_text_color(220, 38, 38) # Red
+            else: pdf.set_text_color(99, 102, 241) # Indigo
+            
+            pdf.set_font("helvetica", "B", 7)
+            pdf.cell(15, 7, str(s['sgpa']), 1, 0, "C", fill)
+            pdf.set_font("helvetica", "", 7)
+            pdf.set_text_color(40, 40, 40) # Reset text color
+
             for sub in subjects:
                 g = next((x for x in s['grades'] if x.get('subjectCODE') == sub), None)
                 grade = g['grade'] if g else "-"
-                pdf.cell(col_width, 7, grade, 1, 0, "C")
+                
+                # Highlight fails
+                if grade == 'F': pdf.set_text_color(220, 38, 38)
+                elif grade in ['S','O','E']: pdf.set_text_color(5, 150, 105)
+                
+                pdf.cell(col_width, 7, grade, 1, 0, "C", fill)
+                pdf.set_text_color(40, 40, 40) # Reset
             pdf.ln()
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

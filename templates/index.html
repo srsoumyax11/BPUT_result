@@ -296,9 +296,31 @@
                 html: `#table-${id}`,
                 startY: 35,
                 theme: 'grid',
-                styles: { fontSize: 8, cellPadding: 2, textColor: [40, 40, 40], lineColor: [200, 200, 200] },
-                headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
-                alternateRowStyles: { fillColor: [252, 252, 252] },
+                styles: { 
+                    fontSize: 8, 
+                    cellPadding: 2, 
+                    textColor: [40, 40, 40], 
+                    lineColor: [220, 220, 220] 
+                },
+                headStyles: { 
+                    fillColor: [99, 102, 241], // Indigo Accent
+                    textColor: [255, 255, 255], 
+                    fontStyle: 'bold' 
+                },
+                alternateRowStyles: { 
+                    fillColor: [248, 250, 252] 
+                },
+                didParseCell: function(data) {
+                    if (data.section === 'body') {
+                        const cellText = data.cell.text[0];
+                        if (cellText === 'F' || cellText === 'M') {
+                            data.cell.styles.textColor = [220, 38, 38]; // Red
+                            data.cell.styles.fontStyle = 'bold';
+                        } else if (['S','O','E'].includes(cellText)) {
+                            data.cell.styles.textColor = [5, 150, 105]; // Green
+                        }
+                    }
+                }
             });
 
             doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
