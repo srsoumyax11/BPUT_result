@@ -294,3 +294,18 @@ tr:hover {
 ::-webkit-scrollbar-thumb {
     background: var(--border);
 }
+
+.sidebar-footer {
+    padding: 1.5rem 1rem;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+    text-align: center;
+}
+
+.sidebar-footer a {
+    transition: transform 0.2s;
+}
+
+.sidebar-footer a:hover {
+    transform: translateY(-2px);
+}

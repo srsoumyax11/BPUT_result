@@ -63,6 +63,81 @@ def generate_excel(results):
     df.to_excel(filepath, index=False)
     return filepath
 
+def generate_pdf(results):
+    from fpdf import FPDF
+    
+    # Group results by Branch and Semester
+    groups = {}
+    for res in results:
+        info = res.get('student_info', {})
+        branch = info.get('branchName', 'Branch').split('(')[-1].replace(')', '').strip()
+        for sem_id, detail in res.get('detailed_results', {}).items():
+            sem_name = detail.get('grades', [{}])[0].get('semester', sem_id)
+            group_key = f"{branch} - {sem_name}"
+            if group_key not in groups:
+                groups[group_key] = []
+            groups[group_key].append({
+                "roll": res['roll_no'],
+                "name": info.get('studentName', 'N/A'),
+                "sgpa": detail.get('sgpadetails', {}).get('sgpa', 'N/A'),
+                "grades": detail.get('grades', [])
+            })
+
+    os.makedirs("exports", exist_ok=True)
+    pdf_paths = []
+    
+    for title, students in groups.items():
+        pdf = FPDF(orientation="L", unit="mm", format="A4")
+        pdf.add_page()
+        pdf.set_font("helvetica", "B", 16)
+        pdf.cell(0, 10, "BPUT ACADEMIC REPORT", ln=True, align="C")
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 10, f"Group: {title}", ln=True)
+        pdf.set_font("helvetica", "I", 8)
+        pdf.cell(0, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
+        pdf.ln(5)
+
+        # Get unique subjects for this group
+        subjects = []
+        for s in students:
+            for g in s['grades']:
+                if g.get('subjectCODE') not in subjects:
+                    subjects.append(g.get('subjectCODE'))
+        subjects.sort()
+
+        # Table Header
+        pdf.set_font("helvetica", "B", 8)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(25, 8, "Roll No", 1, 0, "C", True)
+        pdf.cell(50, 8, "Name", 1, 0, "C", True)
+        pdf.cell(15, 8, "SGPA", 1, 0, "C", True)
+        
+        col_width = 180 / max(len(subjects), 1) if subjects else 20
+        for sub in subjects:
+            pdf.cell(col_width, 8, sub, 1, 0, "C", True)
+        pdf.ln()
+
+        # Rows
+        pdf.set_font("helvetica", "", 7)
+        for s in students:
+            pdf.cell(25, 7, str(s['roll']), 1)
+            pdf.cell(50, 7, s['name'][:30], 1)
+            pdf.cell(15, 7, str(s['sgpa']), 1, 0, "C")
+            for sub in subjects:
+                g = next((x for x in s['grades'] if x.get('subjectCODE') == sub), None)
+                grade = g['grade'] if g else "-"
+                pdf.cell(col_width, 7, grade, 1, 0, "C")
+            pdf.ln()
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_title = title.replace(" ", "_").replace("&", "and")
+        pdf_filename = f"{safe_title}_{timestamp}.pdf"
+        pdf_path = os.path.join("exports", pdf_filename)
+        pdf.output(pdf_path)
+        pdf_paths.append(pdf_path)
+    
+    return pdf_paths
+
 def main():
     print("\n" + "="*40)
     print("      BPUT RESULT SCRAPER (CLI)      ")
