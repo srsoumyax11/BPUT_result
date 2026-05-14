@@ -97,6 +97,9 @@ def stream_results():
         return jsonify({"error": "Invalid registration range"}), 400
 
     def generate():
+        # Yield initial status to keep the connection alive during slow pre-fetches
+        yield "event: status\ndata: " + json.dumps({"message": "Starting batch extraction..."}) + "\n\n"
+        
         all_results = []
         
         # 1. Pre-fetch the first student to get common header info (sequential)
