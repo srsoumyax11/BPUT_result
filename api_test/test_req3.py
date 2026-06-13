@@ -23,7 +23,6 @@ def test_request():
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Dest": "empty",
         "Referer": "https://results.bput.ac.in/",
-        "Accept-Encoding": "gzip, deflate, br",
         "Priority": "u=1, i"
     }
 
