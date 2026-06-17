@@ -59,15 +59,12 @@ def get_user_inputs():
     )
     session = session.strip()
 
-    # Threads
-    threads = IntPrompt.ask("  [cyan]Threads[/cyan]", default=10)
-
     console.print()
     return {
         "start": start,
         "end": end,
         "session": session,
-        "threads": threads,
+        "threads": 10,  # Hardcoded to prevent thread exhaustion on low-end hardware
     }
 
 

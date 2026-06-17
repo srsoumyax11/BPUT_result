@@ -115,23 +115,32 @@ def main():
     remaining = roll_numbers[1:] if len(roll_numbers) > 1 else []
 
     if remaining:
-        live_table = create_results_table()
-        # Add preview to live table
-        r_roll, r_name, r_sgpa, r_branch, r_sem, r_grades, r_codes, r_name_map, r_status = extract_student_row_data(preview_result)
-        add_result_row(live_table, 1, r_roll, r_name, r_sgpa, r_status)
-
+        recent_results = [(1, preview_result)]
         live_row_index = 1
         live_lock = threading.Lock()
 
-        def on_result(result):
-            nonlocal live_row_index, completed_count
-            with live_lock:
-                completed_count += 1
-                live_row_index += 1
-                r_roll, r_name, r_sgpa, r_branch, r_sem, r_grades, r_codes, r_name_map, r_status = extract_student_row_data(result)
-                add_result_row(live_table, live_row_index, r_roll, r_name, r_sgpa, r_status)
+        live_table = create_results_table()
+        r_roll, r_name, r_sgpa, r_branch, r_sem, r_grades, r_codes, r_name_map, r_status = extract_student_row_data(preview_result)
+        add_result_row(live_table, 1, r_roll, r_name, r_sgpa, r_status)
 
-        with Live(live_table, refresh_per_second=4, console=console):
+        with Live(live_table, refresh_per_second=4, console=console) as live:
+            def on_result(result):
+                nonlocal live_row_index, completed_count
+                with live_lock:
+                    completed_count += 1
+                    live_row_index += 1
+                    recent_results.append((live_row_index, result))
+                    if len(recent_results) > 5:
+                        recent_results.pop(0)
+                    
+                    # Recreate table with only the last 5 results to save CPU
+                    new_table = create_results_table()
+                    for idx, res in recent_results:
+                        r_roll, r_name, r_sgpa, r_branch, r_sem, r_grades, r_codes, r_name_map, r_status = extract_student_row_data(res)
+                        add_result_row(new_table, idx, r_roll, r_name, r_sgpa, r_status)
+                    
+                    live.update(new_table)
+
             batch_results, batch_failed = fetch_batch(
                 resolver, remaining, session, threads, on_result
             )

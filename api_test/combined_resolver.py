@@ -21,12 +21,14 @@ class BPUTResolver:
 
     def __init__(self, timeout=10):
         self.timeout = timeout
+        self.session = requests.Session()
+        self.session.headers.update(self.HEADERS)
 
     def _post_request(self, endpoint, params, description):
         """Helper to handle POST requests with error reporting."""
         url = f"{self.BASE_URL}/{endpoint}"
         try:
-            response = requests.post(url, params=params, headers=self.HEADERS, timeout=self.timeout)
+            response = self.session.post(url, params=params, timeout=self.timeout)
             
             if response.status_code != 200:
                 error_msg = f"Failed {description}: HTTP {response.status_code} - {response.reason}"

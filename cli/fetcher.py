@@ -59,7 +59,12 @@ def fetch_single_student(resolver, roll_no, session):
                 # Don't retry for missing profiles — they genuinely don't exist
                 return result
 
-            result["student_info"] = info_res["data"]
+            # Strip massive base64 images to prevent OOM crashes
+            student_data = info_res["data"]
+            for key in ["studentPic", "studentSign"]:
+                student_data.pop(key, None)
+
+            result["student_info"] = student_data
 
             # 2. Get result list
             list_res = r.get_result_list(roll_no, session)
@@ -86,7 +91,7 @@ def fetch_single_student(resolver, roll_no, session):
                 result["error"] = grades_res.get("error", "Failed to fetch grades")
                 # This could be a timeout — allow retry
                 if attempt < len(TIMEOUT_SEQUENCE) - 1:
-                    time.sleep(1)
+                    time.sleep(2 ** attempt)  # Exponential backoff
                     continue
                 return result
 
@@ -103,7 +108,7 @@ def fetch_single_student(resolver, roll_no, session):
             if any(kw in error_msg.lower() for kw in ["timeout", "connection", "reset", "refused"]):
                 result["status"] = "TIMEOUT"
                 if attempt < len(TIMEOUT_SEQUENCE) - 1:
-                    time.sleep(1)
+                    time.sleep(2 ** attempt)  # Exponential backoff
                     continue
             else:
                 result["status"] = "ERROR"
