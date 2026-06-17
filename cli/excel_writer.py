@@ -61,8 +61,6 @@ class ExcelWriter:
         self.section_data_start_row = 1  # where data rows started (for footer placement)
         self.row_count_in_section = 0
         self.section_students = []       # store (roll_no, name, sgpa) for toppers list
-        self.auto_save_counter = 0
-        self.auto_save_interval = 10
 
         # Generate filename
         safe_session = session.replace("(", "").replace(")", "").replace("-", "_").replace(" ", "_")
@@ -222,10 +220,6 @@ class ExcelWriter:
         self.ws.row_dimensions[self.current_row].height = 18
         self.current_row += 1
 
-        # Auto-save check
-        self.auto_save_counter += 1
-        if self.auto_save_counter % self.auto_save_interval == 0:
-            self.save()
 
     def write_subject_footer(self):
         """
@@ -239,10 +233,39 @@ class ExcelWriter:
         valid_students = [s for s in self.section_students if isinstance(s[2], (int, float))]
         top_students = sorted(valid_students, key=lambda x: x[2], reverse=True)[:6]
 
-        # --- Write Topper Data at the TOP ---
+        # --- Bottom Footer (Subject Codes & Toppers side-by-side) ---
+        self.current_row += 1  # blank row
+        start_row = self.current_row
+
+        # Write Subject Code Reference Header (Columns 1-4)
+        self.ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=4)
+        cell = self.ws.cell(row=start_row, column=1, value="Subject Code Reference:")
+        cell.font = FONT_FOOTER_LABEL
+        cell.fill = FILL_FOOTER
+        cell.alignment = ALIGN_LEFT
+
+        curr_sub_row = start_row + 1
+        for code in self.current_subject_codes:
+            name = self.subject_name_map.get(code, "Unknown")
+            cell_code = self.ws.cell(row=curr_sub_row, column=1, value=code)
+            cell_code.font = FONT_FOOTER_LABEL
+            cell_code.fill = FILL_FOOTER
+            cell_code.alignment = ALIGN_LEFT
+            cell_code.border = THIN_BORDER
+
+            self.ws.merge_cells(start_row=curr_sub_row, start_column=2, end_row=curr_sub_row, end_column=4)
+            cell_name = self.ws.cell(row=curr_sub_row, column=2, value=name)
+            cell_name.font = FONT_FOOTER_VALUE
+            cell_name.fill = FILL_FOOTER
+            cell_name.alignment = ALIGN_LEFT
+            cell_name.border = THIN_BORDER
+            curr_sub_row += 1
+
+        # Write Toppers List right beside the Subject Codes (Columns 6-8)
+        curr_top_row = start_row
         if top_students:
-            topper_row = self.section_data_start_row - 2
-            topper_col = 3 + len(self.current_subject_codes) + 2
+            topper_col = 6
+            topper_row = start_row
 
             self.ws.merge_cells(start_row=topper_row, start_column=topper_col, end_row=topper_row, end_column=topper_col+2)
             title = f"Branch Toppers {self.session} {getattr(self, 'current_semester', '')} (Top 6):"
@@ -283,34 +306,8 @@ class ExcelWriter:
                 
                 curr_top_row += 1
 
-        # --- Bottom Footer (Subject Codes) ---
-        self.current_row += 1  # blank row
-        start_row = self.current_row
-
-        self.ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=4)
-        cell = self.ws.cell(row=start_row, column=1, value="Subject Code Reference:")
-        cell.font = FONT_FOOTER_LABEL
-        cell.fill = FILL_FOOTER
-        cell.alignment = ALIGN_LEFT
-
-        curr_sub_row = start_row + 1
-        for code in self.current_subject_codes:
-            name = self.subject_name_map.get(code, "Unknown")
-            cell_code = self.ws.cell(row=curr_sub_row, column=1, value=code)
-            cell_code.font = FONT_FOOTER_LABEL
-            cell_code.fill = FILL_FOOTER
-            cell_code.alignment = ALIGN_LEFT
-            cell_code.border = THIN_BORDER
-
-            self.ws.merge_cells(start_row=curr_sub_row, start_column=2, end_row=curr_sub_row, end_column=4)
-            cell_name = self.ws.cell(row=curr_sub_row, column=2, value=name)
-            cell_name.font = FONT_FOOTER_VALUE
-            cell_name.fill = FILL_FOOTER
-            cell_name.alignment = ALIGN_LEFT
-            cell_name.border = THIN_BORDER
-            curr_sub_row += 1
-
-        self.current_row = curr_sub_row
+        # Advance current row past whichever block was longer
+        self.current_row = max(curr_sub_row, curr_top_row)
 
     def rename_sheet(self, name):
         """Rename the current active worksheet."""
