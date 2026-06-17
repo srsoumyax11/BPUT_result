@@ -136,8 +136,8 @@ class BPUTResolver:
 if __name__ == "__main__":
     resolver = BPUTResolver()
     
-    test_roll = "2301230101"
-    test_session = "Odd-(2025-26)"
+    test_roll = input("Test Reg: ")
+    test_session = input('Ex: "Odd-(2025-26)"')
     
     print(f"--- Resolving all data for {test_roll} ---")
     full_data = resolver.resolve_all(test_roll, test_session)

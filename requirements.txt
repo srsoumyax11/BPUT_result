@@ -5,3 +5,4 @@ requests
 gunicorn
 bs4
 fpdf2
+rich
