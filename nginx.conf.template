@@ -25,9 +25,9 @@ http {
             }
         }
 
-        # Proxy everything else to ttyd running internally on port 10000
+        # Proxy everything else to ttyd running internally on port 9999
         location / {
-            proxy_pass http://127.0.0.1:10000;
+            proxy_pass http://127.0.0.1:9999;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
