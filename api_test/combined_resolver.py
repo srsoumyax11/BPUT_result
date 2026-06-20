@@ -1,4 +1,6 @@
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import json
 import logging
 
@@ -16,13 +18,26 @@ class BPUTResolver:
     HEADERS = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
         "Content-Type": "application/json; charset=utf-8",
-        "X-Requested-With": "XMLHttpRequest"
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": "https://results.bput.ac.in",
+        "Referer": "https://results.bput.ac.in/"
     }
 
-    def __init__(self, timeout=10):
+    def __init__(self, timeout=10, max_retries=3):
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update(self.HEADERS)
+        
+        # Setup auto-retry strategy for flaky servers
+        retry_strategy = Retry(
+            total=max_retries,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["POST"],
+            backoff_factor=1
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def _post_request(self, endpoint, params, description):
         """Helper to handle POST requests with error reporting."""
