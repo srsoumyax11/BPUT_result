@@ -116,55 +116,77 @@ def run_batch_task(task_id: str, start_roll: int, end_roll: int, session: str, l
         excel = ExcelWriter(session)
         
         roll_numbers = [str(r) for r in range(start_roll, end_roll + 1)]
+        successful_results = []
         
         def on_result(result):
             # Send live progress to the frontend via SSE queue
             asyncio.run_coroutine_threadsafe(queue.put({"type": "progress", "data": result}), loop)
             
             # Write successful results to the Excel file
-            status = result.get("status")
-            if status == "SUCCESS":
-                info = result.get("student_info") or {}
-                name = info.get("studentName", "N/A")
-                branch = info.get("branchName", "UNKNOWN")
-                sem = result.get("semester", "N/A")
-                grades_data = result.get("grades_data") or {}
-                sgpa = grades_data.get("sgpadetails", {}).get("sgpa", "N/A")
-                grades_list = grades_data.get("grades", [])
-                
-                grades_dict = {}
-                subject_codes = []
-                subject_name_map = {}
-                for g in grades_list:
-                    code = g.get("subjectCODE")
-                    if code:
-                        grades_dict[code] = g.get("grade", "—")
-                        if code not in subject_codes:
-                            subject_codes.append(code)
-                        subject_name_map[code] = g.get("subjectName", "Unknown")
-                        
-                # Handle Excel sections
-                # We need to detect if the branch has changed.
-                current_branch = getattr(excel, 'current_branch', None)
-                
-                if not excel.current_subject_codes or current_branch != branch:
-                    if excel.current_subject_codes:
-                        excel.write_subject_footer() # Close previous section
-                    excel.current_branch = branch
-                    excel.start_branch_section(branch, sem, subject_codes, subject_name_map)
-                else:
-                    for code in subject_codes:
-                        if code not in excel.current_subject_codes:
-                            excel.current_subject_codes.append(code)
-                            excel.add_new_subject_header(code, subject_name_map.get(code, "Unknown"))
-                
-                excel.add_student_row(result["roll_no"], name, sgpa, grades_dict)
-                
+            if result.get("status") == "SUCCESS":
+                successful_results.append(result)
+            
         # Start the batch fetch (uses a ThreadPool internally)
         fetch_batch(resolver, roll_numbers, session, threads=5, on_result=on_result)
         
+        # Sort results by Branch Name, then by Roll No
+        successful_results.sort(key=lambda r: (
+            r.get("student_info", {}).get("branchName", "UNKNOWN"),
+            r.get("roll_no", "")
+        ))
+        
+        # Write to Excel sequentially so sections don't fragment
+        for result in successful_results:
+            info = result.get("student_info") or {}
+            name = info.get("studentName", "N/A")
+            branch = info.get("branchName", "UNKNOWN")
+            sem = result.get("semester", "N/A")
+            grades_data = result.get("grades_data") or {}
+            sgpa = grades_data.get("sgpadetails", {}).get("sgpa", "N/A")
+            grades_list = grades_data.get("grades", [])
+            
+            grades_dict = {}
+            subject_codes = []
+            subject_name_map = {}
+            for g in grades_list:
+                code = g.get("subjectCODE")
+                if code:
+                    grades_dict[code] = g.get("grade", "—")
+                    if code not in subject_codes:
+                        subject_codes.append(code)
+                    subject_name_map[code] = g.get("subjectName", "Unknown")
+                    
+            current_branch = getattr(excel, 'current_branch', None)
+            
+            if not excel.current_subject_codes or current_branch != branch:
+                if excel.current_subject_codes:
+                    excel.write_subject_footer() # Close previous section
+                
+                excel.current_branch = branch
+                
+                # Create a new sheet for the branch
+                short_branch = branch.split("(")[-1].replace(")", "").strip()[:20]
+                sheet_name = f"{short_branch} {sem}"
+                
+                if current_branch is None:
+                    # Rename the default first sheet
+                    excel.rename_sheet(sheet_name)
+                else:
+                    # Create a brand new sheet (tab) for the new branch
+                    excel.new_sheet(sheet_name)
+                
+                excel.start_branch_section(branch, sem, subject_codes, subject_name_map)
+            else:
+                for code in subject_codes:
+                    if code not in excel.current_subject_codes:
+                        excel.current_subject_codes.append(code)
+                        excel.add_new_subject_header(code, subject_name_map.get(code, "Unknown"))
+            
+            excel.add_student_row(result["roll_no"], name, sgpa, grades_dict)
+        
         # Save and close excel
-        excel.write_subject_footer()
+        if getattr(excel, 'current_subject_codes', None):
+            excel.write_subject_footer()
         excel.close()
         
         # Notify frontend that we are done and where the file is
